@@ -1,0 +1,4 @@
+github.com/spf13/pflag v1.0.6 h1:jFzHGLGAlb3ruxLB8MhbI6A8+AQX/2eW4qeyNZXNp2o=
+github.com/spf13/pflag v1.0.6/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
+gopkg.in/vansante/go-ffprobe.v2 v2.2.1 h1:sFV08OT1eZ1yroLCZVClIVd9YySgCh9eGjBWO0oRayI=
+gopkg.in/vansante/go-ffprobe.v2 v2.2.1/go.mod h1:qF0AlAjk7Nqzqf3y333Ly+KxN3cKF2JqA3JT5ZheUGE=
