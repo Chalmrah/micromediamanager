@@ -66,6 +66,7 @@ func main() {
 			case "hevc":
 				err := copyFile(filepath.Join(sourceFolder, file.Name()), episodePath)
 				if err != nil {
+					log.Printf("Unable to copy file to %s, error:%v", file.Name(), err)
 					return
 				}
 			}
