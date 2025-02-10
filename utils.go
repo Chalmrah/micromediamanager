@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -11,12 +12,13 @@ import (
 
 func getDestinationFileName(dst string, season int, extension string) (string, error) {
 
-	dstFolder := filepath.Join(dst, "Season"+strconv.Itoa(season))
+	dstFolder := filepath.Join(dst, "Season "+strconv.Itoa(season))
 	episodeNumber, err := getEpisodeNumber(dstFolder)
-	if err != nil {
+	if errors.Is(err, os.ErrNotExist) {
+		episodeNumber = 1
+	} else if err != nil {
 		return "", err
 	}
-
 	episodename := fmt.Sprintf("%v - %vx%v%v", filepath.Base(dst), season, episodeNumber, extension)
 	return episodename, nil
 }

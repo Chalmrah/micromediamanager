@@ -2,26 +2,40 @@ package main
 
 import (
 	"fmt"
+	"github.com/fatih/color"
 	"github.com/spf13/pflag"
 	"log"
 	"mkvcompressor/handbrake"
+	"os"
 	"path/filepath"
-	"strings"
+	"runtime"
+	"strconv"
 )
 
 var (
 	configFile   string
 	sourceFolder string
 	version      bool
+	goVersion    = runtime.Version()
+	buildDate    = "unknown"
+	buildCommit  = "dev"
+	buildVersion = "unknown"
 )
 
 func main() {
 
 	pflag.StringVarP(&configFile, "configFile", "c", "", "Location of config json")
 	pflag.StringVarP(&sourceFolder, "sourceFolder", "s", "", "Location of source media folder")
-	pflag.BoolVarP(&version, "version", "v", false, "Print version and exit")
+	pflag.BoolVarP(&version, "version", "v", false, "Displays version information")
 	pflag.Parse()
 
+	if version {
+		fmt.Printf("MicroMediaManager: %s\nCommit Hash: %s\nBuild Date: %s\nGo Version: %s\n", buildVersion, buildCommit, buildDate, goVersion)
+		os.Exit(0)
+	}
+
+	green := color.New(color.FgHiGreen).SprintFunc()
+	red := color.New(color.FgHiRed).SprintFunc()
 	// read json file
 	// loop over shows
 	//   read source directory
@@ -46,33 +60,38 @@ func main() {
 		}
 
 		for _, file := range showList {
+			fmt.Printf("%s", green(file.Name()))
+
 			encoding, err := getVideoCodec(filepath.Join(sourceFolder, file.Name()))
 			if err != nil {
 				log.Fatalf("Get video codec %s error:%v", file.Name(), err)
 			}
 
-			episodePath, err := getDestinationFileName(
+			episodeName, err := getDestinationFileName(
 				v.MappingFolder,
 				v.Season,
-				strings.TrimSuffix(file.Name(), filepath.Ext(file.Name())),
+				filepath.Ext(file.Name()),
 			)
 			if err != nil {
-				log.Fatalf("Unable to get destination file name:%v", file.Name(), err)
+				log.Fatalf("Unable to get destination file name:%v ", file.Name())
 			}
+			destinationPath := filepath.Join(v.MappingFolder, "Season "+strconv.Itoa(v.Season), episodeName)
+
+			fmt.Printf(" %s %s\n", red("-->"), filepath.Base(episodeName))
 
 			switch encoding {
 			case "h264":
-				handbrake.Reencode()
+				_, err := handbrake.Run(filepath.Join(sourceFolder, file.Name()), destinationPath, 24)
+				if err != nil {
+					return
+				}
 			case "hevc":
-				err := copyFile(filepath.Join(sourceFolder, file.Name()), episodePath)
+				err := copyFile(filepath.Join(sourceFolder, file.Name()), episodeName)
 				if err != nil {
 					log.Printf("Unable to copy file to %s, error:%v", file.Name(), err)
 					return
 				}
 			}
-
-			fmt.Printf("%v %v\n", encoding, file.Name())
 		}
-
 	}
 }
