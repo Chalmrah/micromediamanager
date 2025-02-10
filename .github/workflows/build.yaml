@@ -26,6 +26,14 @@ jobs:
         with:
           go-version: '1.23'
 
+      - name: Code quality test
+        uses: golangci/golangci-lint-action@v6
+        env:
+          GOOS: ${{ matrix.os }}
+        with:
+          version: latest
+          skip-cache: true
+
       - name: Build MicroMediaManager for ${{ matrix.os }} ${{ matrix.arch }}
         run: |
           mkdir -p releases/${{ matrix.os }}-${{ matrix.arch }}
