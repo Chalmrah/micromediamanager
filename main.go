@@ -95,8 +95,8 @@ func main() {
 				}
 			}
 		}
-		if !changedFiles {
-			fmt.Printf("No files detected")
-		}
+	}
+	if !changedFiles {
+		fmt.Printf("No files detected")
 	}
 }
