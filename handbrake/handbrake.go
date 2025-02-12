@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strconv"
 )
 
 func Run(inputFile, outputFile string, quality int) (bool, error) {
@@ -18,7 +19,7 @@ func Run(inputFile, outputFile string, quality int) (bool, error) {
 		"--encoder-profile=main",
 		"--all-audio",
 		"--all-subtitles",
-		"-q", string(rune(quality)),
+		"-q", strconv.Itoa(quality),
 		"-f", "av_mkv",
 		"--input", inputFile,
 		"--output", outputFile,
