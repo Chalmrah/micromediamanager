@@ -20,6 +20,7 @@ var (
 	buildDate    = "unknown"
 	buildCommit  = "dev"
 	buildVersion = "unknown"
+	changedFiles = false
 )
 
 func main() {
@@ -30,7 +31,7 @@ func main() {
 	pflag.Parse()
 
 	if version {
-		fmt.Printf("MicroMediaManager: %s\nCommit Hash: %s\nBuild Date: %s\nGo Version: %s\n", buildVersion, buildCommit, buildDate, goVersion)
+		fmt.Printf("MicroMediaManager  %s\n- commit hssh: %s\n- build date: %s\n- go version: %s\n", buildVersion, buildCommit, buildDate, goVersion)
 		os.Exit(0)
 	}
 
@@ -52,14 +53,14 @@ func main() {
 	fileList := readSourceFolderFiles(sourceFolder)
 
 	for _, v := range showList {
-		showList := filterFileList(fileList, v.FileName+"*")
+		filteredFileList := filterFileList(fileList, v.FileName+"*")
 
 		if len(showList) == 0 {
 			//log.Printf("No matching files for %v found", v.FileName)
 			continue
 		}
 
-		for _, file := range showList {
+		for _, file := range filteredFileList {
 			fmt.Printf("%s", green(file.Name()))
 
 			encoding, err := getVideoCodec(filepath.Join(sourceFolder, file.Name()))
@@ -78,6 +79,7 @@ func main() {
 			destinationPath := filepath.Join(v.MappingFolder, "Season "+strconv.Itoa(v.Season), episodeName)
 
 			fmt.Printf(" %s %s\n", red("-->"), filepath.Base(episodeName))
+			changedFiles = true
 
 			switch encoding {
 			case "h264":
@@ -92,6 +94,9 @@ func main() {
 					return
 				}
 			}
+		}
+		if !changedFiles {
+			fmt.Printf("No files detected")
 		}
 	}
 }
