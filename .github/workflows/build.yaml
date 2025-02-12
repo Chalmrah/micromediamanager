@@ -37,7 +37,7 @@ jobs:
       - name: Build MicroMediaManager for ${{ matrix.os }} ${{ matrix.arch }}
         run: |
           mkdir -p releases/${{ matrix.os }}-${{ matrix.arch }}
-          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -ldflags "-X main.buildVersion=$(git describe --tags --always --dirty) -X main.buildCommit=$(git rev-parse --short HEAD) -X main.buildDate=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" -o micromediamanager-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.os == 'windows' && '.exe' || '' }}
+          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -ldflags "-X main.buildVersion=$(git describe --tags --always --dirty) -X main.buildCommit=$(git rev-parse --short HEAD) -X main.buildDate=$(date -u +"%Y-%m-%d")" -o micromediamanager-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.os == 'windows' && '.exe' || '' }}
 
       - name: Release with Notes
         uses: softprops/action-gh-release@v1
