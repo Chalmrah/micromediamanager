@@ -78,6 +78,12 @@ func main() {
 			}
 			destinationPath := filepath.Join(v.MappingFolder, "Season "+strconv.Itoa(v.Season), episodeName)
 
+			folderName := filepath.Dir(destinationPath)
+
+			if _, err := os.Stat(folderName); os.IsNotExist(err) {
+				os.MkdirAll(folderName, os.ModePerm)
+			}
+
 			fmt.Printf(" %s %s\n", red("-->"), filepath.Base(episodeName))
 			changedFiles = true
 
