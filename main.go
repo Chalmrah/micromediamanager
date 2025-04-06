@@ -81,7 +81,10 @@ func main() {
 			folderName := filepath.Dir(destinationPath)
 
 			if _, err := os.Stat(folderName); os.IsNotExist(err) {
-				os.MkdirAll(folderName, os.ModePerm)
+				err := os.MkdirAll(folderName, os.ModePerm)
+				if err != nil {
+					log.Printf("Unable to create folder:%v ", folderName)
+				}
 			}
 
 			fmt.Printf(" %s %s\n", red("-->"), filepath.Base(episodeName))
