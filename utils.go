@@ -32,41 +32,26 @@ func getEpisodeNumber(folder string) (int, error) {
 }
 
 func copyFile(src, dst string) error {
-	sourceFile, err := os.Open(src)
+	srcFile, err := os.Open(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open source file: %w", err)
 	}
-	defer sourceFile.Close()
+	defer srcFile.Close()
 
-	destDir := filepath.Dir(dst)
-	if err := os.MkdirAll(destDir, os.ModePerm); err != nil {
-		return err
-	}
-
-	destinationFile, err := os.Create(dst)
+	dstFile, err := os.Create(dst)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create destination file: %w", err)
 	}
-	defer destinationFile.Close()
+	defer dstFile.Close()
 
-	_, err = io.Copy(destinationFile, sourceFile)
+	_, err = io.Copy(dstFile, srcFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to copy content: %w", err)
 	}
 
-	fileInfo, err := os.Stat(src)
+	err = dstFile.Sync()
 	if err != nil {
-		return err
-	}
-
-	err = os.Chmod(dst, fileInfo.Mode())
-	if err != nil {
-		return err
-	}
-
-	err = os.Chtimes(dst, fileInfo.ModTime(), fileInfo.ModTime())
-	if err != nil {
-		return err
+		return fmt.Errorf("failed to sync destination file: %w", err)
 	}
 
 	return nil
