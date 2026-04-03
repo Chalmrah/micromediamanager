@@ -17,6 +17,7 @@ var (
 	configFile   string
 	sourceFolder string
 	version      bool
+	dryRun       bool
 	goVersion    = runtime.Version()
 	buildDate    = "unknown"
 	buildCommit  = "dev"
@@ -27,6 +28,7 @@ func main() {
 	pflag.StringVarP(&configFile, "configFile", "c", "", "Location of config json")
 	pflag.StringVarP(&sourceFolder, "sourceFolder", "s", "", "Location of source media folder")
 	pflag.BoolVarP(&version, "version", "v", false, "Displays version information")
+	pflag.BoolVar(&dryRun, "dryRun", false, "Preview actions without transcoding, copying, or triggering rescans")
 	pflag.Parse()
 
 	if version {
@@ -41,6 +43,11 @@ func main() {
 	green := color.New(color.FgHiGreen).SprintFunc()
 	red := color.New(color.FgHiRed).SprintFunc()
 	yellow := color.New(color.FgHiYellow).SprintFunc()
+	cyan := color.New(color.FgHiCyan).SprintFunc()
+
+	if dryRun {
+		fmt.Printf("%s No files will be modified\n\n", cyan("[DRY RUN]"))
+	}
 
 	config, err := ReadConfig(configFile)
 	if err != nil {
@@ -120,15 +127,6 @@ func main() {
 		ext := filepath.Ext(file.Name())
 		destinationPath := buildDestinationPath(series, matchedEpisode, ext)
 
-		// Ensure destination directory exists
-		folderName := filepath.Dir(destinationPath)
-		if _, err := os.Stat(folderName); os.IsNotExist(err) {
-			if err := os.MkdirAll(folderName, os.ModePerm); err != nil {
-				log.Printf("Unable to create folder: %v", folderName)
-				continue
-			}
-		}
-
 		fmt.Printf("%s %s %s\n", green(file.Name()), red("-->"), filepath.Base(destinationPath))
 
 		encoding, err := getVideoCodec(filepath.Join(sourceFolder, file.Name()))
@@ -137,19 +135,35 @@ func main() {
 			continue
 		}
 
-		srcPath := filepath.Join(sourceFolder, file.Name())
 		if encoding == "hevc" {
-			err := copyFile(srcPath, destinationPath)
-			if err != nil {
-				log.Printf("Unable to copy file %s: %v", file.Name(), err)
-				continue
-			}
+			log.Printf("Action: copy (already HEVC)")
 		} else {
-			log.Printf("Transcoding %s (codec: %s) to HEVC", file.Name(), encoding)
-			_, err := handbrake.Run(srcPath, destinationPath, config.HandbrakeQuality)
-			if err != nil {
-				log.Printf("Handbrake error for %s: %v", file.Name(), err)
-				continue
+			log.Printf("Action: transcode %s to HEVC (quality %d)", encoding, config.HandbrakeQuality)
+		}
+
+		if !dryRun {
+			// Ensure destination directory exists
+			folderName := filepath.Dir(destinationPath)
+			if _, err := os.Stat(folderName); os.IsNotExist(err) {
+				if err := os.MkdirAll(folderName, os.ModePerm); err != nil {
+					log.Printf("Unable to create folder: %v", folderName)
+					continue
+				}
+			}
+
+			srcPath := filepath.Join(sourceFolder, file.Name())
+			if encoding == "hevc" {
+				err := copyFile(srcPath, destinationPath)
+				if err != nil {
+					log.Printf("Unable to copy file %s: %v", file.Name(), err)
+					continue
+				}
+			} else {
+				_, err := handbrake.Run(srcPath, destinationPath, config.HandbrakeQuality)
+				if err != nil {
+					log.Printf("Handbrake error for %s: %v", file.Name(), err)
+					continue
+				}
 			}
 		}
 
@@ -159,13 +173,17 @@ func main() {
 
 	// Trigger Sonarr rescan for each affected series
 	for _, series := range affectedSeries {
-		log.Printf("Triggering Sonarr rescan for %s", series.Title)
-		_, err := client.SendCommand(&sonarr.CommandRequest{
-			Name:     "RescanSeries",
-			SeriesID: series.ID,
-		})
-		if err != nil {
-			log.Printf("Failed to trigger rescan for %s: %v", series.Title, err)
+		if dryRun {
+			log.Printf("Would trigger Sonarr rescan for %s", series.Title)
+		} else {
+			log.Printf("Triggering Sonarr rescan for %s", series.Title)
+			_, err := client.SendCommand(&sonarr.CommandRequest{
+				Name:     "RescanSeries",
+				SeriesID: series.ID,
+			})
+			if err != nil {
+				log.Printf("Failed to trigger rescan for %s: %v", series.Title, err)
+			}
 		}
 	}
 
