@@ -5,33 +5,29 @@ import (
 	"os"
 )
 
-type Show struct {
-	FileName      string `json:"FileName"`
-	MappingFolder string `json:"MappingFolder"`
-	Season        int    `json:"Season"`
+type Config struct {
+	SonarrURL         string `json:"sonarrUrl"`
+	SonarrAPIKey      string `json:"sonarrApiKey"`
+	IgnoreCertificate bool   `json:"ignoreCertificate"`
+	HandbrakeQuality  int    `json:"handbrakeQuality"`
 }
 
-func ReadConfig(fileName string) ([]Show, error) {
+const defaultHandbrakeQuality = 24
+
+func ReadConfig(fileName string) (Config, error) {
 	byteValue, err := os.ReadFile(fileName)
 	if err != nil {
-		return nil, err
+		return Config{}, err
 	}
 
-	var shows []Show
-	if err := json.Unmarshal(byteValue, &shows); err != nil {
-		return nil, err
+	var config Config
+	if err := json.Unmarshal(byteValue, &config); err != nil {
+		return Config{}, err
 	}
 
-	for i := range shows {
-		shows[i].applyDefaults()
+	if config.HandbrakeQuality == 0 {
+		config.HandbrakeQuality = defaultHandbrakeQuality
 	}
 
-	return shows, nil
-}
-
-func (s *Show) applyDefaults() {
-	if 0 == s.Season {
-		s.Season = 1
-	}
-
+	return config, nil
 }

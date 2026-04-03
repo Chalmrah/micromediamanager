@@ -16,5 +16,10 @@ func getVideoCodec(filePath string) (string, error) {
 		return "", fmt.Errorf("error probing file: %w", err)
 	}
 
-	return probeData.FirstVideoStream().CodecName, nil
+	stream := probeData.FirstVideoStream()
+	if stream == nil {
+		return "", fmt.Errorf("no video stream found in %s", filePath)
+	}
+
+	return stream.CodecName, nil
 }

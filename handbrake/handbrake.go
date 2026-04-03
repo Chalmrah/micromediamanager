@@ -1,7 +1,7 @@
 package handbrake
 
 import (
-	"log"
+	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
@@ -9,8 +9,7 @@ import (
 
 func Run(inputFile, outputFile string, quality int) (bool, error) {
 	if !verifyHandbrakeInstalled() {
-		log.Printf("Handbrake not installed. Ensure it is installed and in $PATH")
-		return false, nil
+		return false, fmt.Errorf("handbrakecli not found in $PATH; please install HandBrake CLI")
 	}
 
 	cmdArgs := []string{

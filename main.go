@@ -2,14 +2,15 @@ package main
 
 import (
 	"fmt"
-	"github.com/fatih/color"
-	"github.com/spf13/pflag"
 	"log"
-	"mkvcompressor/handbrake"
+	"micromediamanager/handbrake"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
+
+	"github.com/fatih/color"
+	"github.com/spf13/pflag"
+	"golift.io/starr/sonarr"
 )
 
 var (
@@ -20,92 +21,166 @@ var (
 	buildDate    = "unknown"
 	buildCommit  = "dev"
 	buildVersion = "unknown"
-	changedFiles = false
 )
 
 func main() {
-
 	pflag.StringVarP(&configFile, "configFile", "c", "", "Location of config json")
 	pflag.StringVarP(&sourceFolder, "sourceFolder", "s", "", "Location of source media folder")
 	pflag.BoolVarP(&version, "version", "v", false, "Displays version information")
 	pflag.Parse()
 
 	if version {
-		fmt.Printf("MicroMediaManager  %s\n- commit hssh: %s\n- build date: %s\n- go version: %s\n", buildVersion, buildCommit, buildDate, goVersion)
+		fmt.Printf("MicroMediaManager  %s\n- commit hash: %s\n- build date: %s\n- go version: %s\n", buildVersion, buildCommit, buildDate, goVersion)
 		os.Exit(0)
+	}
+
+	if configFile == "" || sourceFolder == "" {
+		log.Fatalf("Required flags missing. Usage:\n  micromediamanager --configFile <path> --sourceFolder <path>")
 	}
 
 	green := color.New(color.FgHiGreen).SprintFunc()
 	red := color.New(color.FgHiRed).SprintFunc()
-	// read json file
-	// loop over shows
-	//   read source directory
-	// 	 evaluate whether there are matching files for each series
-	// 	 evaluate each file for encoding to see whether to move or encode
-	//   get destination file path/name
-	//   encode if not hevc. Copy if hevc.
+	yellow := color.New(color.FgHiYellow).SprintFunc()
 
-	showList, err := ReadConfig(configFile)
+	config, err := ReadConfig(configFile)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Failed to read config: %v", err)
 	}
+
+	client := newSonarrClient(config)
+
+	allSeries, err := client.GetAllSeries()
+	if err != nil {
+		log.Fatalf("Failed to fetch series from Sonarr: %v", err)
+	}
+	log.Printf("Fetched %d series from Sonarr", len(allSeries))
 
 	fileList := readSourceFolderFiles(sourceFolder)
 
-	for _, v := range showList {
-		filteredFileList := filterFileList(fileList, v.FileName+"*")
+	episodeCache := make(map[int64][]*sonarr.Episode)
+	affectedSeries := make(map[int64]*sonarr.Series)
+	var unmatchedFiles []string
+	processedCount := 0
 
-		if len(showList) == 0 {
-			//log.Printf("No matching files for %v found", v.FileName)
+	for _, file := range fileList {
+		if file.IsDir() {
 			continue
 		}
 
-		for _, file := range filteredFileList {
-			fmt.Printf("%s", green(file.Name()))
+		title, episodeNum, err := ParseFilename(file.Name())
+		if err != nil {
+			log.Printf("%s Unable to parse: %s (%v)", yellow("WARN"), file.Name(), err)
+			unmatchedFiles = append(unmatchedFiles, file.Name())
+			continue
+		}
 
-			encoding, err := getVideoCodec(filepath.Join(sourceFolder, file.Name()))
+		series := MatchSeries(allSeries, title)
+		if series == nil {
+			log.Printf("%s No Sonarr match for: %s (parsed title: %q)", yellow("WARN"), file.Name(), title)
+			unmatchedFiles = append(unmatchedFiles, file.Name())
+			continue
+		}
+
+		// Fetch episodes for this series (cached)
+		episodes, ok := episodeCache[series.ID]
+		if !ok {
+			episodes, err = client.GetSeriesEpisodes(&sonarr.GetEpisode{SeriesID: series.ID})
 			if err != nil {
-				log.Fatalf("Get video codec %s error:%v", file.Name(), err)
+				log.Printf("Failed to fetch episodes for %s: %v", series.Title, err)
+				continue
 			}
+			episodeCache[series.ID] = episodes
+		}
 
-			episodeName, err := getDestinationFileName(
-				v.MappingFolder,
-				v.Season,
-				filepath.Ext(file.Name()),
-			)
-			if err != nil {
-				log.Fatalf("Unable to get destination file name:%v ", file.Name())
+		// Find matching episode by absolute number (anime) or episode number
+		var matchedEpisode *sonarr.Episode
+		isAnime := series.SeriesType == "anime"
+		for _, ep := range episodes {
+			if isAnime && ep.AbsoluteEpisodeNumber == episodeNum {
+				matchedEpisode = ep
+				break
 			}
-			destinationPath := filepath.Join(v.MappingFolder, "Season "+strconv.Itoa(v.Season), episodeName)
-
-			folderName := filepath.Dir(destinationPath)
-
-			if _, err := os.Stat(folderName); os.IsNotExist(err) {
-				err := os.MkdirAll(folderName, os.ModePerm)
-				if err != nil {
-					log.Printf("Unable to create folder:%v ", folderName)
-				}
-			}
-
-			fmt.Printf(" %s %s\n", red("-->"), filepath.Base(episodeName))
-			changedFiles = true
-
-			switch encoding {
-			case "h264":
-				_, err := handbrake.Run(filepath.Join(sourceFolder, file.Name()), destinationPath, 24)
-				if err != nil {
-					return
-				}
-			case "hevc":
-				err := copyFile(filepath.Join(sourceFolder, file.Name()), destinationPath)
-				if err != nil {
-					log.Printf("Unable to copy file to %s, error:%v", file.Name(), err)
-					return
-				}
+			if !isAnime && ep.EpisodeNumber == episodeNum && ep.SeasonNumber == 1 {
+				matchedEpisode = ep
+				break
 			}
 		}
+
+		if matchedEpisode == nil {
+			log.Printf("%s No episode %d found for %s in Sonarr", yellow("WARN"), episodeNum, series.Title)
+			unmatchedFiles = append(unmatchedFiles, file.Name())
+			continue
+		}
+
+		if matchedEpisode.HasFile {
+			log.Printf("Skipping %s - episode already has a file in Sonarr", file.Name())
+			continue
+		}
+
+		ext := filepath.Ext(file.Name())
+		destinationPath := buildDestinationPath(series, matchedEpisode, ext)
+
+		// Ensure destination directory exists
+		folderName := filepath.Dir(destinationPath)
+		if _, err := os.Stat(folderName); os.IsNotExist(err) {
+			if err := os.MkdirAll(folderName, os.ModePerm); err != nil {
+				log.Printf("Unable to create folder: %v", folderName)
+				continue
+			}
+		}
+
+		fmt.Printf("%s %s %s\n", green(file.Name()), red("-->"), filepath.Base(destinationPath))
+
+		encoding, err := getVideoCodec(filepath.Join(sourceFolder, file.Name()))
+		if err != nil {
+			log.Printf("Get video codec %s error: %v", file.Name(), err)
+			continue
+		}
+
+		srcPath := filepath.Join(sourceFolder, file.Name())
+		if encoding == "hevc" {
+			err := copyFile(srcPath, destinationPath)
+			if err != nil {
+				log.Printf("Unable to copy file %s: %v", file.Name(), err)
+				continue
+			}
+		} else {
+			log.Printf("Transcoding %s (codec: %s) to HEVC", file.Name(), encoding)
+			_, err := handbrake.Run(srcPath, destinationPath, config.HandbrakeQuality)
+			if err != nil {
+				log.Printf("Handbrake error for %s: %v", file.Name(), err)
+				continue
+			}
+		}
+
+		processedCount++
+		affectedSeries[series.ID] = series
 	}
-	if !changedFiles {
-		fmt.Printf("No files detected")
+
+	// Trigger Sonarr rescan for each affected series
+	for _, series := range affectedSeries {
+		log.Printf("Triggering Sonarr rescan for %s", series.Title)
+		_, err := client.SendCommand(&sonarr.CommandRequest{
+			Name:     "RescanSeries",
+			SeriesID: series.ID,
+		})
+		if err != nil {
+			log.Printf("Failed to trigger rescan for %s: %v", series.Title, err)
+		}
+	}
+
+	// Summary
+	fmt.Println()
+	if processedCount > 0 {
+		fmt.Printf("%s Processed %d file(s) across %d series\n", green("DONE"), processedCount, len(affectedSeries))
+	} else {
+		fmt.Println("No files processed")
+	}
+
+	if len(unmatchedFiles) > 0 {
+		fmt.Printf("\n%s %d unmatched file(s):\n", yellow("WARNING"), len(unmatchedFiles))
+		for _, f := range unmatchedFiles {
+			fmt.Printf("  - %s\n", f)
+		}
 	}
 }
