@@ -60,7 +60,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to fetch series from Sonarr: %v", err)
 	}
-	log.Printf("Fetched %d series from Sonarr", len(allSeries))
+	if dryRun {
+		log.Printf("Fetched %d series from Sonarr", len(allSeries))
+	}
 
 	fileList := readSourceFolderFiles(sourceFolder)
 
@@ -123,12 +125,11 @@ func main() {
 		}
 
 		if matchedEpisode.HasFile {
-			log.Printf("Skipping %s - episode already has a file in Sonarr", file.Name())
 			continue
 		}
 
 		ext := filepath.Ext(file.Name())
-		destinationPath := buildDestinationPath(series, matchedEpisode, ext)
+		destinationPath := buildDestinationPath(config, series, matchedEpisode, ext)
 
 		fmt.Printf("%s %s %s\n", green(file.Name()), red("-->"), filepath.Base(destinationPath))
 
@@ -181,7 +182,6 @@ func main() {
 		if dryRun {
 			log.Printf("Would trigger Sonarr rescan for %s", series.Title)
 		} else {
-			log.Printf("Triggering Sonarr rescan for %s", series.Title)
 			_, err := client.SendCommand(&sonarr.CommandRequest{
 				Name:     "RescanSeries",
 				SeriesID: series.ID,

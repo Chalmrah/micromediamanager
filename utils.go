@@ -51,8 +51,9 @@ func readSourceFolderFiles(sourceFolder string) []os.DirEntry {
 
 // buildDestinationPath constructs the full output path using Sonarr series/episode metadata.
 // Format: {series.Path}/Season {N}/{Title} - S{ss}E{ee}{ext}
-func buildDestinationPath(series *sonarr.Series, episode *sonarr.Episode, ext string) string {
+// The series path is remapped from Sonarr's path to the local path using config.
+func buildDestinationPath(config Config, series *sonarr.Series, episode *sonarr.Episode, ext string) string {
 	seasonDir := fmt.Sprintf("Season %d", episode.SeasonNumber)
 	filename := fmt.Sprintf("%s - S%02dE%02d%s", series.Title, episode.SeasonNumber, episode.EpisodeNumber, ext)
-	return filepath.Join(series.Path, seasonDir, filename)
+	return filepath.Join(config.RemapPath(series.Path), seasonDir, filename)
 }

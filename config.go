@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -10,6 +11,16 @@ type Config struct {
 	SonarrAPIKey      string `json:"sonarrApiKey"`
 	IgnoreCertificate bool   `json:"ignoreCertificate"`
 	HandbrakeQuality  int    `json:"handbrakeQuality"`
+	SonarrBasePath    string `json:"sonarrBasePath"`
+	LocalBasePath     string `json:"localBasePath"`
+}
+
+// RemapPath replaces the Sonarr base path prefix with the local base path.
+func (c Config) RemapPath(sonarrPath string) string {
+	if c.SonarrBasePath != "" && c.LocalBasePath != "" {
+		return strings.Replace(sonarrPath, c.SonarrBasePath, c.LocalBasePath, 1)
+	}
+	return sonarrPath
 }
 
 const defaultHandbrakeQuality = 24
