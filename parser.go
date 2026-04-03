@@ -12,12 +12,14 @@ import (
 )
 
 var bracketRegex = regexp.MustCompile(`^\[.*?\]\s*`)
-var trailingBracketRegex = regexp.MustCompile(`\s*\[.*?\]`)
+var trailingTagRegex = regexp.MustCompile(`\s*[\[\(].*?[\]\)]`)
 var versionSuffix = regexp.MustCompile(`v\d+$`)
+var seasonSuffix = regexp.MustCompile(`(?i)\s+S(\d+)$`)
 
-// ParseFilename extracts the series title and episode number from a filename.
-// Expected format (after stripping brackets): "Title - 03v2.mkv"
-func ParseFilename(filename string) (title string, episodeNum int, err error) {
+// ParseFilename extracts the series title, season number, and episode number from a filename.
+// Expected format (after stripping brackets): "Title S2 - 03v2.mkv"
+// If no season suffix is present, seasonNum defaults to 1.
+func ParseFilename(filename string) (title string, seasonNum int, episodeNum int, err error) {
 	name := strings.TrimSuffix(filename, filepath.Ext(filename))
 
 	// Strip leading [bracket] groups (e.g. [SubGroup])
@@ -29,24 +31,32 @@ func ParseFilename(filename string) (title string, episodeNum int, err error) {
 	// Split on " - " to separate title from episode info
 	parts := strings.SplitN(name, " - ", 2)
 	if len(parts) != 2 {
-		return "", 0, fmt.Errorf("unable to parse filename: %q (no ' - ' separator found)", filename)
+		return "", 0, 0, fmt.Errorf("unable to parse filename: %q (no ' - ' separator found)", filename)
 	}
 
 	title = strings.TrimSpace(parts[0])
+
+	// Extract and strip season suffix from title (e.g. "Title S2" → "Title", season 2)
+	seasonNum = 1
+	if m := seasonSuffix.FindStringSubmatch(title); m != nil {
+		seasonNum, _ = strconv.Atoi(m[1])
+		title = seasonSuffix.ReplaceAllString(title, "")
+	}
+
 	epPart := strings.TrimSpace(parts[1])
 
-	// Strip trailing bracket groups (e.g. "03 [1080p][HEVC]" → "03")
-	epPart = trailingBracketRegex.ReplaceAllString(epPart, "")
+	// Strip trailing tag groups: [1080p], (1080p), [HEVC], [hash], etc.
+	epPart = trailingTagRegex.ReplaceAllString(epPart, "")
 	// Strip version suffix (e.g. "03v2" → "03")
 	epPart = versionSuffix.ReplaceAllString(epPart, "")
 	epPart = strings.TrimSpace(epPart)
 
 	episodeNum, err = strconv.Atoi(epPart)
 	if err != nil {
-		return "", 0, fmt.Errorf("unable to parse episode number from %q: %w", filename, err)
+		return "", 0, 0, fmt.Errorf("unable to parse episode number from %q: %w", filename, err)
 	}
 
-	return title, episodeNum, nil
+	return title, seasonNum, episodeNum, nil
 }
 
 // NormalizeTitle lowercases and strips non-alphanumeric characters for fuzzy matching.

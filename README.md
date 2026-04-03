@@ -72,7 +72,7 @@ micromediamanager --configFile config.json --sourceFolder /path/to/media
 | `--configFile` | `-c` | Path to the JSON config file (required) |
 | `--sourceFolder` | `-s` | Path to the folder containing source media files (required) |
 | `--version` | `-v` | Print version information and exit |
-| `--dryRun` | | Preview what would happen without transcoding, copying, or triggering Sonarr rescans |
+| `--dry-run` | `-d` | Preview what would happen without transcoding, copying, or triggering Sonarr rescans |
 
 ## How It Works
 

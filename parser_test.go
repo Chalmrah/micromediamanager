@@ -8,41 +8,82 @@ import (
 
 func TestParseFilename(t *testing.T) {
 	tests := []struct {
-		name       string
-		filename   string
-		wantTitle  string
-		wantEpNum  int
-		wantErr    bool
+		name         string
+		filename     string
+		wantTitle    string
+		wantSeason   int
+		wantEpNum    int
+		wantErr      bool
 	}{
 		{
-			name:      "standard format",
-			filename:  "[SubGroup] My Anime - 03.mkv",
-			wantTitle: "My Anime",
-			wantEpNum: 3,
+			name:       "standard format",
+			filename:   "[SubGroup] My Anime - 03.mkv",
+			wantTitle:  "My Anime",
+			wantSeason: 1,
+			wantEpNum:  3,
 		},
 		{
-			name:      "version suffix",
-			filename:  "[SubGroup] My Anime - 03v2.mkv",
-			wantTitle: "My Anime",
-			wantEpNum: 3,
+			name:       "version suffix",
+			filename:   "[SubGroup] My Anime - 03v2.mkv",
+			wantTitle:  "My Anime",
+			wantSeason: 1,
+			wantEpNum:  3,
 		},
 		{
-			name:      "trailing bracket tags",
-			filename:  "[SubGroup] My Anime - 03 [1080p][HEVC].mkv",
-			wantTitle: "My Anime",
-			wantEpNum: 3,
+			name:       "trailing bracket tags",
+			filename:   "[SubGroup] My Anime - 03 [1080p][HEVC].mkv",
+			wantTitle:  "My Anime",
+			wantSeason: 1,
+			wantEpNum:  3,
 		},
 		{
-			name:      "trailing tags with version",
-			filename:  "[SubGroup] My Anime - 03v2 [1080p][HEVC].mkv",
-			wantTitle: "My Anime",
-			wantEpNum: 3,
+			name:       "trailing tags with version",
+			filename:   "[SubGroup] My Anime - 03v2 [1080p][HEVC].mkv",
+			wantTitle:  "My Anime",
+			wantSeason: 1,
+			wantEpNum:  3,
 		},
 		{
-			name:      "multiple leading bracket groups",
-			filename:  "[SubGroup][720p] My Anime - 12.mkv",
-			wantTitle: "My Anime",
-			wantEpNum: 12,
+			name:       "multiple leading bracket groups",
+			filename:   "[SubGroup][720p] My Anime - 12.mkv",
+			wantTitle:  "My Anime",
+			wantSeason: 1,
+			wantEpNum:  12,
+		},
+		{
+			name:       "parenthesized tags",
+			filename:   "[SubsPlease] Dorohedoro S2 - 01 (1080p) [B0159228].mkv",
+			wantTitle:  "Dorohedoro",
+			wantSeason: 2,
+			wantEpNum:  1,
+		},
+		{
+			name:       "season suffix stripped from title",
+			filename:   "Tensei Shitara Slime Datta Ken S4 - 01 (1080p) [182FF0C9].mkv",
+			wantTitle:  "Tensei Shitara Slime Datta Ken",
+			wantSeason: 4,
+			wantEpNum:  1,
+		},
+		{
+			name:       "version with parenthesized and bracket tags",
+			filename:   "Otonari no Tenshi-sama ni Itsunomanika Dame Ningen ni Sareteita Ken S2 - 01v2 (1080p) [6504C9CC].mkv",
+			wantTitle:  "Otonari no Tenshi-sama ni Itsunomanika Dame Ningen ni Sareteita Ken",
+			wantSeason: 2,
+			wantEpNum:  1,
+		},
+		{
+			name:       "empty leading bracket",
+			filename:   "[] Sousou no Frieren S2 - 04 (1080p) [698A157A].mkv",
+			wantTitle:  "Sousou no Frieren",
+			wantSeason: 2,
+			wantEpNum:  4,
+		},
+		{
+			name:       "no season defaults to 1",
+			filename:   "[Sub] Title - 05.mkv",
+			wantTitle:  "Title",
+			wantSeason: 1,
+			wantEpNum:  5,
 		},
 		{
 			name:    "no separator",
@@ -58,10 +99,10 @@ func TestParseFilename(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			title, epNum, err := ParseFilename(tt.filename)
+			title, seasonNum, epNum, err := ParseFilename(tt.filename)
 			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("expected error, got title=%q epNum=%d", title, epNum)
+					t.Fatalf("expected error, got title=%q season=%d epNum=%d", title, seasonNum, epNum)
 				}
 				return
 			}
@@ -70,6 +111,9 @@ func TestParseFilename(t *testing.T) {
 			}
 			if title != tt.wantTitle {
 				t.Errorf("title = %q, want %q", title, tt.wantTitle)
+			}
+			if seasonNum != tt.wantSeason {
+				t.Errorf("seasonNum = %d, want %d", seasonNum, tt.wantSeason)
 			}
 			if epNum != tt.wantEpNum {
 				t.Errorf("epNum = %d, want %d", epNum, tt.wantEpNum)

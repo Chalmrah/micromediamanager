@@ -28,7 +28,7 @@ func main() {
 	pflag.StringVarP(&configFile, "configFile", "c", "", "Location of config json")
 	pflag.StringVarP(&sourceFolder, "sourceFolder", "s", "", "Location of source media folder")
 	pflag.BoolVarP(&version, "version", "v", false, "Displays version information")
-	pflag.BoolVar(&dryRun, "dryRun", false, "Preview actions without transcoding, copying, or triggering rescans")
+	pflag.BoolVarP(&dryRun, "dry-run", "d", false, "Preview actions without transcoding, copying, or triggering rescans")
 	pflag.Parse()
 
 	if version {
@@ -74,7 +74,7 @@ func main() {
 			continue
 		}
 
-		title, episodeNum, err := ParseFilename(file.Name())
+		title, seasonNum, episodeNum, err := ParseFilename(file.Name())
 		if err != nil {
 			log.Printf("%s Unable to parse: %s (%v)", yellow("WARN"), file.Name(), err)
 			unmatchedFiles = append(unmatchedFiles, file.Name())
@@ -99,15 +99,18 @@ func main() {
 			episodeCache[series.ID] = episodes
 		}
 
-		// Find matching episode by absolute number (anime) or episode number
+		// Find matching episode:
+		// - If filename has an explicit season (S2, S3, etc.), match by season + episode number
+		// - If no season specified and series is anime, match by absolute episode number
+		// - Otherwise match by season (default 1) + episode number
 		var matchedEpisode *sonarr.Episode
-		isAnime := series.SeriesType == "anime"
+		useAbsolute := series.SeriesType == "anime" && seasonNum == 1
 		for _, ep := range episodes {
-			if isAnime && ep.AbsoluteEpisodeNumber == episodeNum {
+			if useAbsolute && ep.AbsoluteEpisodeNumber == episodeNum {
 				matchedEpisode = ep
 				break
 			}
-			if !isAnime && ep.EpisodeNumber == episodeNum && ep.SeasonNumber == 1 {
+			if !useAbsolute && ep.EpisodeNumber == episodeNum && ep.SeasonNumber == seasonNum {
 				matchedEpisode = ep
 				break
 			}
@@ -135,10 +138,12 @@ func main() {
 			continue
 		}
 
-		if encoding == "hevc" {
-			log.Printf("Action: copy (already HEVC)")
-		} else {
-			log.Printf("Action: transcode %s to HEVC (quality %d)", encoding, config.HandbrakeQuality)
+			if dryRun {
+			if encoding == "hevc" {
+				log.Printf("Action: copy (already HEVC)")
+			} else {
+				log.Printf("Action: transcode %s to HEVC (quality %d)", encoding, config.HandbrakeQuality)
+			}
 		}
 
 		if !dryRun {
