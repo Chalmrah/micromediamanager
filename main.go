@@ -76,7 +76,7 @@ func main() {
 			continue
 		}
 
-		title, seasonNum, episodeNum, err := ParseFilename(file.Name())
+		title, seasonNum, episodeNum, explicitSeason, err := ParseFilename(file.Name())
 		if err != nil {
 			log.Printf("%s Unable to parse: %s (%v)", yellow("WARN"), file.Name(), err)
 			unmatchedFiles = append(unmatchedFiles, file.Name())
@@ -102,11 +102,11 @@ func main() {
 		}
 
 		// Find matching episode:
-		// - If filename has an explicit season (S2, S3, etc.), match by season + episode number
+		// - If filename has an explicit season (S2, S01E01, etc.), match by season + episode number
 		// - If no season specified and series is anime, match by absolute episode number
 		// - Otherwise match by season (default 1) + episode number
 		var matchedEpisode *sonarr.Episode
-		useAbsolute := series.SeriesType == "anime" && seasonNum == 1
+		useAbsolute := series.SeriesType == "anime" && !explicitSeason
 		for _, ep := range episodes {
 			if useAbsolute && ep.AbsoluteEpisodeNumber == episodeNum {
 				matchedEpisode = ep

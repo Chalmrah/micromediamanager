@@ -8,12 +8,13 @@ import (
 
 func TestParseFilename(t *testing.T) {
 	tests := []struct {
-		name         string
-		filename     string
-		wantTitle    string
-		wantSeason   int
-		wantEpNum    int
-		wantErr      bool
+		name           string
+		filename       string
+		wantTitle      string
+		wantSeason     int
+		wantEpNum      int
+		wantExplicit   bool
+		wantErr        bool
 	}{
 		{
 			name:       "standard format",
@@ -51,32 +52,36 @@ func TestParseFilename(t *testing.T) {
 			wantEpNum:  12,
 		},
 		{
-			name:       "parenthesized tags",
-			filename:   "[SubsPlease] Dorohedoro S2 - 01 (1080p) [B0159228].mkv",
-			wantTitle:  "Dorohedoro",
-			wantSeason: 2,
-			wantEpNum:  1,
+			name:         "parenthesized tags",
+			filename:     "[SubsPlease] Dorohedoro S2 - 01 (1080p) [B0159228].mkv",
+			wantTitle:    "Dorohedoro",
+			wantSeason:   2,
+			wantEpNum:    1,
+			wantExplicit: true,
 		},
 		{
-			name:       "season suffix stripped from title",
-			filename:   "Tensei Shitara Slime Datta Ken S4 - 01 (1080p) [182FF0C9].mkv",
-			wantTitle:  "Tensei Shitara Slime Datta Ken",
-			wantSeason: 4,
-			wantEpNum:  1,
+			name:         "season suffix stripped from title",
+			filename:     "Tensei Shitara Slime Datta Ken S4 - 01 (1080p) [182FF0C9].mkv",
+			wantTitle:    "Tensei Shitara Slime Datta Ken",
+			wantSeason:   4,
+			wantEpNum:    1,
+			wantExplicit: true,
 		},
 		{
-			name:       "version with parenthesized and bracket tags",
-			filename:   "Otonari no Tenshi-sama ni Itsunomanika Dame Ningen ni Sareteita Ken S2 - 01v2 (1080p) [6504C9CC].mkv",
-			wantTitle:  "Otonari no Tenshi-sama ni Itsunomanika Dame Ningen ni Sareteita Ken",
-			wantSeason: 2,
-			wantEpNum:  1,
+			name:         "version with parenthesized and bracket tags",
+			filename:     "Otonari no Tenshi-sama ni Itsunomanika Dame Ningen ni Sareteita Ken S2 - 01v2 (1080p) [6504C9CC].mkv",
+			wantTitle:    "Otonari no Tenshi-sama ni Itsunomanika Dame Ningen ni Sareteita Ken",
+			wantSeason:   2,
+			wantEpNum:    1,
+			wantExplicit: true,
 		},
 		{
-			name:       "empty leading bracket",
-			filename:   "[] Sousou no Frieren S2 - 04 (1080p) [698A157A].mkv",
-			wantTitle:  "Sousou no Frieren",
-			wantSeason: 2,
-			wantEpNum:  4,
+			name:         "empty leading bracket",
+			filename:     "[] Sousou no Frieren S2 - 04 (1080p) [698A157A].mkv",
+			wantTitle:    "Sousou no Frieren",
+			wantSeason:   2,
+			wantEpNum:    4,
+			wantExplicit: true,
 		},
 		{
 			name:       "no season defaults to 1",
@@ -95,11 +100,27 @@ func TestParseFilename(t *testing.T) {
 			filename: "[SubGroup] My Anime - SP1.mkv",
 			wantErr: true,
 		},
+		{
+			name:         "scene release dot-separated",
+			filename:     "Farming.Life.in.Another.World.S02E01.1080p.ADN.WEB-DL.JPN.AAC2.0.H.264.MSubs-ToonsHub.mkv",
+			wantTitle:    "Farming Life in Another World",
+			wantSeason:   2,
+			wantEpNum:    1,
+			wantExplicit: true,
+		},
+		{
+			name:         "scene release with higher episode",
+			filename:     "Some.Show.S02E13.Episode.Title.720p.WEB-DL.mkv",
+			wantTitle:    "Some Show",
+			wantSeason:   2,
+			wantEpNum:    13,
+			wantExplicit: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			title, seasonNum, epNum, err := ParseFilename(tt.filename)
+			title, seasonNum, epNum, explicitSeason, err := ParseFilename(tt.filename)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error, got title=%q season=%d epNum=%d", title, seasonNum, epNum)
@@ -117,6 +138,9 @@ func TestParseFilename(t *testing.T) {
 			}
 			if epNum != tt.wantEpNum {
 				t.Errorf("epNum = %d, want %d", epNum, tt.wantEpNum)
+			}
+			if explicitSeason != tt.wantExplicit {
+				t.Errorf("explicitSeason = %v, want %v", explicitSeason, tt.wantExplicit)
 			}
 		})
 	}
