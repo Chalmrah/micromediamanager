@@ -1,12 +1,15 @@
 package main
 
 import (
+	"crypto/tls"
 	"fmt"
 	"log"
 	"micromediamanager/handbrake"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/spf13/pflag"
@@ -66,7 +69,15 @@ func main() {
 
 	fileList := readSourceFolderFiles(sourceFolder)
 
-	episodeCache := make(map[int64][]*sonarr.Episode)
+	// Build HTTP client for raw API calls (reuses TLS config from Sonarr client)
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+	if config.IgnoreCertificate {
+		httpClient.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+		}
+	}
+
+	episodeCache := make(map[int64][]*Episode)
 	affectedSeries := make(map[int64]*sonarr.Series)
 	var unmatchedFiles []string
 	processedCount := 0
@@ -93,7 +104,7 @@ func main() {
 		// Fetch episodes for this series (cached)
 		episodes, ok := episodeCache[series.ID]
 		if !ok {
-			episodes, err = client.GetSeriesEpisodes(&sonarr.GetEpisode{SeriesID: series.ID})
+			episodes, err = getSeriesEpisodes(config, httpClient, series.ID)
 			if err != nil {
 				log.Printf("Failed to fetch episodes for %s: %v", series.Title, err)
 				continue
@@ -101,22 +112,7 @@ func main() {
 			episodeCache[series.ID] = episodes
 		}
 
-		// Find matching episode:
-		// - If filename has an explicit season (S2, S01E01, etc.), match by season + episode number
-		// - If no season specified and series is anime, match by absolute episode number
-		// - Otherwise match by season (default 1) + episode number
-		var matchedEpisode *sonarr.Episode
-		useAbsolute := series.SeriesType == "anime" && !explicitSeason
-		for _, ep := range episodes {
-			if useAbsolute && ep.AbsoluteEpisodeNumber == episodeNum {
-				matchedEpisode = ep
-				break
-			}
-			if !useAbsolute && ep.EpisodeNumber == episodeNum && ep.SeasonNumber == seasonNum {
-				matchedEpisode = ep
-				break
-			}
-		}
+		matchedEpisode := MatchEpisode(episodes, seasonNum, episodeNum, series.SeriesType == "anime", explicitSeason)
 
 		if matchedEpisode == nil {
 			log.Printf("%s No episode %d found for %s in Sonarr", yellow("WARN"), episodeNum, series.Title)

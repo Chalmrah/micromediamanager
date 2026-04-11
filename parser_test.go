@@ -170,6 +170,103 @@ func TestNormalizeTitle(t *testing.T) {
 	}
 }
 
+func TestMatchEpisode(t *testing.T) {
+	episodes := []*Episode{
+		// Standard season/episode numbering (non-anime or matching TVDB)
+		{Episode: sonarr.Episode{SeasonNumber: 1, EpisodeNumber: 1, AbsoluteEpisodeNumber: 1}},
+		{Episode: sonarr.Episode{SeasonNumber: 1, EpisodeNumber: 2, AbsoluteEpisodeNumber: 2}},
+		{Episode: sonarr.Episode{SeasonNumber: 2, EpisodeNumber: 1, AbsoluteEpisodeNumber: 13}},
+		// Bookworm-style: TVDB has everything in Season 1, but scene numbering uses S4
+		{
+			Episode:              sonarr.Episode{SeasonNumber: 1, EpisodeNumber: 37, AbsoluteEpisodeNumber: 37},
+			SceneSeasonNumber:    4,
+			SceneEpisodeNumber:   1,
+			SceneAbsoluteNumber:  37,
+		},
+		{
+			Episode:              sonarr.Episode{SeasonNumber: 1, EpisodeNumber: 38, AbsoluteEpisodeNumber: 38},
+			SceneSeasonNumber:    4,
+			SceneEpisodeNumber:   2,
+			SceneAbsoluteNumber:  38,
+		},
+	}
+
+	tests := []struct {
+		name           string
+		seasonNum      int
+		episodeNum     int
+		isAnime        bool
+		explicitSeason bool
+		wantAbsolute   int // 0 means expect nil
+	}{
+		{
+			name:         "anime absolute match (no explicit season)",
+			seasonNum:    1,
+			episodeNum:   37,
+			isAnime:      true,
+			wantAbsolute: 37,
+		},
+		{
+			name:           "standard season+episode match",
+			seasonNum:      2,
+			episodeNum:     1,
+			isAnime:        false,
+			explicitSeason: true,
+			wantAbsolute:   13,
+		},
+		{
+			name:           "scene numbering fallback - S4 ep 1 matches absolute 37",
+			seasonNum:      4,
+			episodeNum:     1,
+			isAnime:        true,
+			explicitSeason: true,
+			wantAbsolute:   37,
+		},
+		{
+			name:           "scene numbering fallback - S4 ep 2 matches absolute 38",
+			seasonNum:      4,
+			episodeNum:     2,
+			isAnime:        true,
+			explicitSeason: true,
+			wantAbsolute:   38,
+		},
+		{
+			name:           "no match returns nil",
+			seasonNum:      5,
+			episodeNum:     1,
+			isAnime:        true,
+			explicitSeason: true,
+			wantAbsolute:   0,
+		},
+		{
+			name:           "direct season match preferred over scene numbering",
+			seasonNum:      1,
+			episodeNum:     1,
+			isAnime:        true,
+			explicitSeason: true,
+			wantAbsolute:   1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := MatchEpisode(episodes, tt.seasonNum, tt.episodeNum, tt.isAnime, tt.explicitSeason)
+			if tt.wantAbsolute == 0 {
+				if got != nil {
+					t.Fatalf("expected nil, got episode with absolute number %d", got.AbsoluteEpisodeNumber)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatal("expected match, got nil")
+			}
+			if got.AbsoluteEpisodeNumber != tt.wantAbsolute {
+				t.Errorf("AbsoluteEpisodeNumber = %d, want %d", got.AbsoluteEpisodeNumber, tt.wantAbsolute)
+			}
+		})
+	}
+}
+
 func TestMatchSeries(t *testing.T) {
 	series := []*sonarr.Series{
 		{

@@ -88,6 +88,26 @@ func NormalizeTitle(title string) string {
 	return strings.TrimSpace(b.String())
 }
 
+// MatchEpisode finds the matching episode from a list using the following strategy:
+//   - If the series is anime and the filename has no explicit season, match by absolute episode number
+//   - Otherwise match by season + episode number, falling back to scene numbering
+//     (handles anime where fansub seasons differ from TVDB structure)
+func MatchEpisode(episodes []*Episode, seasonNum, episodeNum int, isAnime, explicitSeason bool) *Episode {
+	useAbsolute := isAnime && !explicitSeason
+	for _, ep := range episodes {
+		if useAbsolute && ep.AbsoluteEpisodeNumber == episodeNum {
+			return ep
+		}
+		if !useAbsolute && ep.EpisodeNumber == episodeNum && ep.SeasonNumber == seasonNum {
+			return ep
+		}
+		if !useAbsolute && ep.SceneEpisodeNumber == episodeNum && ep.SceneSeasonNumber == seasonNum {
+			return ep
+		}
+	}
+	return nil
+}
+
 // MatchSeries finds the Sonarr series whose title or alternate titles match the parsed title.
 func MatchSeries(allSeries []*sonarr.Series, title string) *sonarr.Series {
 	normalized := NormalizeTitle(title)
