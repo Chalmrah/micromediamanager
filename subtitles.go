@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -92,7 +91,10 @@ func clearForcedFlags(filePath string, tracks []int) error {
 		args = append(args, "--edit", fmt.Sprintf("track:s%d", n), "--set", "flag-forced=0")
 	}
 
-	cmd := exec.Command("mkvpropedit", args...)
-	cmd.Stdout = os.Stdout
-	return cmd.Run()
+	// mkvpropedit is chatty on success; only surface output when it fails.
+	out, err := exec.Command("mkvpropedit", args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("mkvpropedit: %v: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }

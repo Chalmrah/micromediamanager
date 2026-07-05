@@ -15,12 +15,13 @@ func remuxToMKV(inputFile, outputFile string) error {
 	}
 
 	cmd := exec.Command("ffmpeg",
+		"-loglevel", "error",
 		"-i", inputFile,
 		"-map", "0",
 		"-c", "copy",
 		"-y",
 		outputFile,
 	)
-	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }

@@ -189,8 +189,6 @@ func main() {
 			} else if len(tracks) > 0 {
 				if err := clearForcedFlags(destinationPath, tracks); err != nil {
 					log.Printf("%s mkvpropedit failed for %s: %v", yellow("WARN"), filepath.Base(destinationPath), err)
-				} else {
-					log.Printf("Cleared forced flag on subtitle track(s) %v of %s", tracks, filepath.Base(destinationPath))
 				}
 			}
 		}
