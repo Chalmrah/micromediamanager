@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/fatih/color"
@@ -124,22 +125,31 @@ func main() {
 			continue
 		}
 
-		ext := filepath.Ext(file.Name())
-		destinationPath := buildDestinationPath(config, series, matchedEpisode, ext)
+		srcExt := filepath.Ext(file.Name())
+		srcPath := filepath.Join(sourceFolder, file.Name())
+		// Everything is normalised to MKV so the container is consistent and
+		// the forced-flag fix below always has an MKV to edit.
+		destinationPath := buildDestinationPath(config, series, matchedEpisode, ".mkv")
 
 		fmt.Printf("%s %s %s\n", green(file.Name()), red("-->"), filepath.Base(destinationPath))
 
-		encoding, err := getVideoCodec(filepath.Join(sourceFolder, file.Name()))
+		encoding, err := getVideoCodec(srcPath)
 		if err != nil {
 			log.Printf("Get video codec %s error: %v", file.Name(), err)
 			continue
 		}
 
-			if dryRun {
-			if encoding == "hevc" {
-				log.Printf("Action: copy (already HEVC)")
-			} else {
-				log.Printf("Action: transcode %s to HEVC (quality %d)", encoding, config.HandbrakeQuality)
+		if dryRun {
+			switch {
+			case encoding == "hevc" && strings.EqualFold(srcExt, ".mkv"):
+				log.Printf("Action: copy (already HEVC MKV)")
+			case encoding == "hevc":
+				log.Printf("Action: remux %s to MKV (already HEVC)", srcExt)
+			default:
+				log.Printf("Action: transcode %s to HEVC MKV (quality %d)", encoding, config.HandbrakeQuality)
+			}
+			if tracks, err := englishForcedTracksToClear(srcPath); err == nil && len(tracks) > 0 {
+				log.Printf("Action: clear forced flag on subtitle track(s) %v", tracks)
 			}
 		}
 
@@ -148,23 +158,39 @@ func main() {
 			folderName := filepath.Dir(destinationPath)
 			if _, err := os.Stat(folderName); os.IsNotExist(err) {
 				if err := os.MkdirAll(folderName, os.ModePerm); err != nil {
-					log.Printf("Unable to create folder: %v", folderName)
+					log.Printf("Unable to create folder %q: %v", folderName, err)
 					continue
 				}
 			}
 
-			srcPath := filepath.Join(sourceFolder, file.Name())
 			if encoding == "hevc" {
-				err := copyFile(srcPath, destinationPath)
-				if err != nil {
-					log.Printf("Unable to copy file %s: %v", file.Name(), err)
-					continue
+				if strings.EqualFold(srcExt, ".mkv") {
+					if err := copyFile(srcPath, destinationPath); err != nil {
+						log.Printf("Unable to copy file %s: %v", file.Name(), err)
+						continue
+					}
+				} else {
+					if err := remuxToMKV(srcPath, destinationPath); err != nil {
+						log.Printf("Unable to remux file %s: %v", file.Name(), err)
+						continue
+					}
 				}
 			} else {
-				_, err := handbrake.Run(srcPath, destinationPath, config.HandbrakeQuality)
-				if err != nil {
+				if _, err := handbrake.Run(srcPath, destinationPath, config.HandbrakeQuality); err != nil {
 					log.Printf("Handbrake error for %s: %v", file.Name(), err)
 					continue
+				}
+			}
+
+			// Clear a bogus forced flag on the English subtitle track when the
+			// only English track is forced (header edit, no re-encode).
+			if tracks, err := englishForcedTracksToClear(destinationPath); err != nil {
+				log.Printf("%s subtitle probe failed for %s: %v", yellow("WARN"), filepath.Base(destinationPath), err)
+			} else if len(tracks) > 0 {
+				if err := clearForcedFlags(destinationPath, tracks); err != nil {
+					log.Printf("%s mkvpropedit failed for %s: %v", yellow("WARN"), filepath.Base(destinationPath), err)
+				} else {
+					log.Printf("Cleared forced flag on subtitle track(s) %v of %s", tracks, filepath.Base(destinationPath))
 				}
 			}
 		}
