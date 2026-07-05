@@ -14,7 +14,13 @@ import (
 var bracketRegex = regexp.MustCompile(`^\[.*?\]\s*`)
 var trailingTagRegex = regexp.MustCompile(`\s*[\[\(].*?[\]\)]`)
 var versionSuffix = regexp.MustCompile(`v\d+$`)
-var seasonSuffix = regexp.MustCompile(`(?i)\s+S(\d+)$`)
+// seasonPatterns match a trailing season indicator in a title, capturing the
+// season number. Tried in order: "Title S2", "Title 2nd Season", "Title Season 2".
+var seasonPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)\s+S(\d+)$`),
+	regexp.MustCompile(`(?i)\s+(\d+)(?:st|nd|rd|th)\s+Season$`),
+	regexp.MustCompile(`(?i)\s+Season\s+(\d+)$`),
+}
 var sceneSeasonEpisode = regexp.MustCompile(`(?i)[\.\s]S(\d+)E(\d+)[\.\s]`)
 
 // ParseFilename extracts the series title, season number, and episode number from a filename.
@@ -36,12 +42,16 @@ func ParseFilename(filename string) (title string, seasonNum int, episodeNum int
 	if len(parts) == 2 {
 		title = strings.TrimSpace(parts[0])
 
-		// Extract and strip season suffix from title (e.g. "Title S2" → "Title", season 2)
+		// Extract and strip season suffix from title (e.g. "Title S2" or
+		// "Title 2nd Season" → "Title", season 2)
 		seasonNum = 1
-		if m := seasonSuffix.FindStringSubmatch(title); m != nil {
-			seasonNum, _ = strconv.Atoi(m[1])
-			title = seasonSuffix.ReplaceAllString(title, "")
-			explicitSeason = true
+		for _, re := range seasonPatterns {
+			if m := re.FindStringSubmatch(title); m != nil {
+				seasonNum, _ = strconv.Atoi(m[1])
+				title = strings.TrimSpace(re.ReplaceAllString(title, ""))
+				explicitSeason = true
+				break
+			}
 		}
 
 		epPart := strings.TrimSpace(parts[1])
