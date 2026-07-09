@@ -21,7 +21,31 @@ var seasonPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)\s+(\d+)(?:st|nd|rd|th)\s+Season$`),
 	regexp.MustCompile(`(?i)\s+Season\s+(\d+)$`),
 }
+// romanSeasonSuffix matches a trailing roman numeral used as a season indicator
+// (e.g. "Title II" → season 2). Only applied for values >= 2 so a stray trailing
+// "I" is never misread as a season.
+var romanSeasonSuffix = regexp.MustCompile(`(?i)\s+([ivx]+)$`)
 var sceneSeasonEpisode = regexp.MustCompile(`(?i)[\.\s]S(\d+)E(\d+)[\.\s]`)
+
+// romanToInt converts a roman numeral (case-insensitive) to its integer value,
+// returning 0 if the string is not a well-formed roman numeral.
+func romanToInt(s string) int {
+	values := map[rune]int{'i': 1, 'v': 5, 'x': 10, 'l': 50, 'c': 100, 'd': 500, 'm': 1000}
+	runes := []rune(strings.ToLower(s))
+	total := 0
+	for i, r := range runes {
+		v, ok := values[r]
+		if !ok {
+			return 0
+		}
+		if i+1 < len(runes) && values[runes[i+1]] > v {
+			total -= v
+		} else {
+			total += v
+		}
+	}
+	return total
+}
 
 // ParseFilename extracts the series title, season number, and episode number from a filename.
 // Expected format (after stripping brackets): "Title S2 - 03v2.mkv"
@@ -51,6 +75,18 @@ func ParseFilename(filename string) (title string, seasonNum int, episodeNum int
 				title = strings.TrimSpace(re.ReplaceAllString(title, ""))
 				explicitSeason = true
 				break
+			}
+		}
+
+		// Roman-numeral season suffix (e.g. "Title II" → "Title", season 2).
+		// Only applied for values >= 2 so a stray trailing "I" is not misread.
+		if !explicitSeason {
+			if m := romanSeasonSuffix.FindStringSubmatch(title); m != nil {
+				if n := romanToInt(m[1]); n >= 2 {
+					seasonNum = n
+					title = strings.TrimSpace(romanSeasonSuffix.ReplaceAllString(title, ""))
+					explicitSeason = true
+				}
 			}
 		}
 

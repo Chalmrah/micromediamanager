@@ -108,6 +108,22 @@ func TestParseFilename(t *testing.T) {
 			wantExplicit: true,
 		},
 		{
+			name:         "roman numeral season suffix",
+			filename:     "[Erai-raws] Katainaka no Ossan Kensei ni Naru II - 01 [1080p AMZN WEB-DL AVC EAC3][MultiSub][13F1C02B].mkv",
+			wantTitle:    "Katainaka no Ossan Kensei ni Naru",
+			wantSeason:   2,
+			wantEpNum:    1,
+			wantExplicit: true,
+		},
+		{
+			name:         "roman numeral season three",
+			filename:     "[SubGroup] Some Show III - 05 (1080p).mkv",
+			wantTitle:    "Some Show",
+			wantSeason:   3,
+			wantEpNum:    5,
+			wantExplicit: true,
+		},
+		{
 			name:       "no season defaults to 1",
 			filename:   "[Sub] Title - 05.mkv",
 			wantTitle:  "Title",
