@@ -40,5 +40,8 @@ func ReadConfig(fileName string) (Config, error) {
 		config.HandbrakeQuality = defaultHandbrakeQuality
 	}
 
+	// Avoid double slashes when building raw API URLs.
+	config.SonarrURL = strings.TrimRight(config.SonarrURL, "/")
+
 	return config, nil
 }

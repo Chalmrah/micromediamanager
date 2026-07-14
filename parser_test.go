@@ -156,6 +156,21 @@ func TestParseFilename(t *testing.T) {
 			wantEpNum:    13,
 			wantExplicit: true,
 		},
+		{
+			name:         "scene release ending at episode",
+			filename:     "Some.Show.S01E05.mkv",
+			wantTitle:    "Some Show",
+			wantSeason:   1,
+			wantEpNum:    5,
+			wantExplicit: true,
+		},
+		{
+			name:       "title containing separator",
+			filename:   "[Group] Show - The Second Act - 03 [1080p].mkv",
+			wantTitle:  "Show - The Second Act",
+			wantSeason: 1,
+			wantEpNum:  3,
+		},
 	}
 
 	for _, tt := range tests {
@@ -194,6 +209,9 @@ func TestNormalizeTitle(t *testing.T) {
 	}{
 		{name: "lowercase", input: "My Anime", want: "my anime"},
 		{name: "punctuation stripped", input: "Re:Zero!", want: "re zero"},
+		{name: "apostrophe dropped not split", input: "Aren't Wicked", want: "arent wicked"},
+		{name: "curly apostrophe dropped", input: "Aren’t Wicked", want: "arent wicked"},
+		{name: "ampersand spelled out", input: "Tom & Jerry", want: "tom and jerry"},
 		{name: "mixed case and symbols", input: "Sword Art Online: Alicization", want: "sword art online alicization"},
 		{name: "CJK characters preserved", input: "進撃の巨人", want: "進撃の巨人"},
 		{name: "multiple spaces collapsed", input: "Title   With   Spaces", want: "title with spaces"},

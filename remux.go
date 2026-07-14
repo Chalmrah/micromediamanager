@@ -23,5 +23,10 @@ func remuxToMKV(inputFile, outputFile string) error {
 		outputFile,
 	)
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		// Don't leave a partial file behind for Sonarr to import.
+		os.Remove(outputFile)
+		return err
+	}
+	return nil
 }

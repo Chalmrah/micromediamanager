@@ -13,7 +13,7 @@ import (
 
 var bracketRegex = regexp.MustCompile(`^\[.*?\]\s*`)
 var trailingTagRegex = regexp.MustCompile(`\s*[\[\(].*?[\]\)]`)
-var versionSuffix = regexp.MustCompile(`v\d+$`)
+var versionSuffix = regexp.MustCompile(`(?i)v\d+$`)
 // seasonPatterns match a trailing season indicator in a title, capturing the
 // season number. Tried in order: "Title S2", "Title 2nd Season", "Title Season 2".
 var seasonPatterns = []*regexp.Regexp{
@@ -25,7 +25,7 @@ var seasonPatterns = []*regexp.Regexp{
 // (e.g. "Title II" → season 2). Only applied for values >= 2 so a stray trailing
 // "I" is never misread as a season.
 var romanSeasonSuffix = regexp.MustCompile(`(?i)\s+([ivx]+)$`)
-var sceneSeasonEpisode = regexp.MustCompile(`(?i)[\.\s]S(\d+)E(\d+)[\.\s]`)
+var sceneSeasonEpisode = regexp.MustCompile(`(?i)[\.\s_]S(\d+)E(\d+)(?:[\.\s_]|$)`)
 
 // romanToInt converts a roman numeral (case-insensitive) to its integer value,
 // returning 0 if the string is not a well-formed roman numeral.
@@ -61,10 +61,34 @@ func ParseFilename(filename string) (title string, seasonNum int, episodeNum int
 	}
 	name = strings.TrimSpace(name)
 
-	// Split on " - " to separate title from episode info
-	parts := strings.SplitN(name, " - ", 2)
-	if len(parts) == 2 {
-		title = strings.TrimSpace(parts[0])
+	// Split on " - " to separate title from episode info. A title may itself
+	// contain " - " (e.g. "Show - The Second Act - 03"), so try each
+	// occurrence left to right and use the first split whose right-hand side
+	// parses as an episode number.
+	var epErr error
+	for searchFrom := 0; ; {
+		i := strings.Index(name[searchFrom:], " - ")
+		if i < 0 {
+			break
+		}
+		i += searchFrom
+		searchFrom = i + 3
+
+		epPart := strings.TrimSpace(name[i+3:])
+
+		// Strip trailing tag groups: [1080p], (1080p), [HEVC], [hash], etc.
+		epPart = trailingTagRegex.ReplaceAllString(epPart, "")
+		// Strip version suffix (e.g. "03v2" → "03")
+		epPart = versionSuffix.ReplaceAllString(epPart, "")
+		epPart = strings.TrimSpace(epPart)
+
+		episodeNum, err = strconv.Atoi(epPart)
+		if err != nil {
+			epErr = err
+			continue
+		}
+
+		title = strings.TrimSpace(name[:i])
 
 		// Extract and strip season suffix from title (e.g. "Title S2" or
 		// "Title 2nd Season" → "Title", season 2)
@@ -90,42 +114,42 @@ func ParseFilename(filename string) (title string, seasonNum int, episodeNum int
 			}
 		}
 
-		epPart := strings.TrimSpace(parts[1])
-
-		// Strip trailing tag groups: [1080p], (1080p), [HEVC], [hash], etc.
-		epPart = trailingTagRegex.ReplaceAllString(epPart, "")
-		// Strip version suffix (e.g. "03v2" → "03")
-		epPart = versionSuffix.ReplaceAllString(epPart, "")
-		epPart = strings.TrimSpace(epPart)
-
-		episodeNum, err = strconv.Atoi(epPart)
-		if err != nil {
-			return "", 0, 0, false, fmt.Errorf("unable to parse episode number from %q: %w", filename, err)
-		}
-
 		return title, seasonNum, episodeNum, explicitSeason, nil
 	}
 
 	// Fallback: scene release format (e.g. "Title.Name.S01E02.stuff.mkv")
 	if m := sceneSeasonEpisode.FindStringSubmatchIndex(name); m != nil {
-		// Title is everything before the SxxExx match, with dots replaced by spaces
-		title = strings.ReplaceAll(strings.TrimSpace(name[:m[0]]), ".", " ")
+		// Title is everything before the SxxExx match, with dot/underscore
+		// separators replaced by spaces
+		title = strings.TrimSpace(name[:m[0]])
+		title = strings.ReplaceAll(title, ".", " ")
+		title = strings.ReplaceAll(title, "_", " ")
 		seasonNum, _ = strconv.Atoi(name[m[2]:m[3]])
 		episodeNum, _ = strconv.Atoi(name[m[4]:m[5]])
 		return title, seasonNum, episodeNum, true, nil
 	}
 
+	if epErr != nil {
+		return "", 0, 0, false, fmt.Errorf("unable to parse episode number from %q: %w", filename, epErr)
+	}
 	return "", 0, 0, false, fmt.Errorf("unable to parse filename: %q (no ' - ' separator or SxxExx pattern found)", filename)
 }
 
 // NormalizeTitle lowercases and strips non-alphanumeric characters for fuzzy matching.
 func NormalizeTitle(title string) string {
+	// Spell out ampersands so "Tom & Jerry" matches "Tom and Jerry".
+	title = strings.ReplaceAll(title, "&", " and ")
 	var b strings.Builder
 	lastSpace := false
 	for _, r := range strings.ToLower(title) {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			b.WriteRune(r)
 			lastSpace = false
+		} else if r == '\'' || r == '’' {
+			// Drop apostrophes rather than treating them as separators, so
+			// "Aren't" normalizes to "arent" and matches scene releases that
+			// omit the apostrophe entirely ("Arent").
+			continue
 		} else if !lastSpace {
 			b.WriteRune(' ')
 			lastSpace = true

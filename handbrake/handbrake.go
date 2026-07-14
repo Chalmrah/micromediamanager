@@ -14,7 +14,9 @@ func Run(inputFile, outputFile string, quality int) (bool, error) {
 
 	cmdArgs := []string{
 		"--encoder", "nvenc_h265",
-		"--encoder-preset=veryslow",
+		// NVENC presets are fastest..slowest; an unknown preset (e.g. the
+		// x265-style "veryslow") is silently ignored and falls back to medium.
+		"--encoder-preset=slowest",
 		"--encoder-profile=main",
 		"--all-audio",
 		"--all-subtitles",
@@ -30,6 +32,8 @@ func Run(inputFile, outputFile string, quality int) (bool, error) {
 
 	err := cmd.Run()
 	if err != nil {
+		// Don't leave a partial file behind for Sonarr to import.
+		os.Remove(outputFile)
 		return false, err
 	}
 

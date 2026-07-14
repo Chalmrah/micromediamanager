@@ -82,6 +82,7 @@ func main() {
 	affectedSeries := make(map[int64]*sonarr.Series)
 	var unmatchedFiles []string
 	processedCount := 0
+	skippedCount := 0
 
 	for _, file := range fileList {
 		if file.IsDir() {
@@ -122,6 +123,7 @@ func main() {
 		}
 
 		if matchedEpisode.HasFile {
+			skippedCount++
 			continue
 		}
 
@@ -218,6 +220,9 @@ func main() {
 		fmt.Printf("%s Processed %d file(s) across %d series\n", green("DONE"), processedCount, len(affectedSeries))
 	} else {
 		fmt.Println("No files processed")
+	}
+	if skippedCount > 0 {
+		fmt.Printf("%s %d file(s) skipped (episode already has a file in Sonarr)\n", cyan("SKIP"), skippedCount)
 	}
 
 	if len(unmatchedFiles) > 0 {
