@@ -14,9 +14,10 @@ func Run(inputFile, outputFile string, quality int) (bool, error) {
 
 	cmdArgs := []string{
 		"--encoder", "nvenc_h265",
-		// NVENC presets are fastest..slowest; an unknown preset (e.g. the
-		// x265-style "veryslow") is silently ignored and falls back to medium.
-		"--encoder-preset=slowest",
+		// NVENC presets are fastest..slowest (not x265 names like "veryslow",
+		// which HandBrake silently ignores). Medium is the speed/quality
+		// balance this tool has always effectively encoded at.
+		"--encoder-preset=medium",
 		"--encoder-profile=main",
 		"--all-audio",
 		"--all-subtitles",
